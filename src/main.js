@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { drainage, trace } from './hydrology.js';
+import { createWaterLayers } from './water-layers.js';
 import './style.css';
 const $=id=>document.getElementById(id);
 async function main(){
@@ -44,7 +45,9 @@ async function main(){
  let selectedPath,selectedLine,selectedStart=centerIndex,selecting=false,topDown=false;
  const dropMarker=new THREE.Mesh(new THREE.SphereGeometry(20,14,10),new THREE.MeshBasicMaterial({color:0xffe3a3}));terrainGroup.add(dropMarker);
  const movingDrop=new THREE.Mesh(new THREE.SphereGeometry(13,12,8),new THREE.MeshBasicMaterial({color:0xffffff}));terrainGroup.add(movingDrop);
+ const waterLayers=createWaterLayers({data,hydro,geometry,terrainGroup,centerIndex,onPickSource:()=>setSelecting(selecting==='flood'?false:'flood'),onCancelSource:()=>{if(selecting==='flood')setSelecting(false);}});
  function select(i){
+  waterLayers.selectPoint(i);
   selectedStart=i;selectedPath=trace(i,hydro.next);
   if(selectedLine){terrainGroup.remove(selectedLine);selectedLine.geometry.dispose();selectedLine.material.dispose();}
   selectedLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(selectedPath.map(j=>point(j,17))),new THREE.LineBasicMaterial({color:0xffdfa1}));terrainGroup.add(selectedLine);dropMarker.position.copy(point(i,20));
@@ -57,7 +60,7 @@ async function main(){
   $('profile').innerHTML=`<path d="M0 56 L${points.replaceAll(' ',' L')} L280 56 Z" fill="#bada9530"/><polyline points="${points}" fill="none" stroke="#c4dc9f" stroke-width="1.5"/>`;
  }
  select(centerIndex);
- for(const [id,value]of [['min-height',min],['mid-height',(min+max)/2],['max-height',max]])$(id).textContent=Math.round(value);
+
  function setView(top){topDown=top;controls.target.set(0,400,0);camera.position.set(top?0:6800,top?14000:9400,top?1:10400);controls.update();$('view3d').classList.toggle('active',!top);$('view2d').classList.toggle('active',top);$('view3d').setAttribute('aria-pressed',!top);$('view2d').setAttribute('aria-pressed',top);}
  setView(false);
  $('view3d').onclick=()=>setView(false);$('view2d').onclick=()=>setView(true);$('reset').onclick=()=>{setView(false);select(centerIndex);};
@@ -65,12 +68,21 @@ async function main(){
  const zoom=f=>{const delta=camera.position.clone().sub(controls.target);delta.setLength(THREE.MathUtils.clamp(delta.length()*f,controls.minDistance,controls.maxDistance));camera.position.copy(controls.target).add(delta);controls.update();};$('zoom-in').onclick=()=>zoom(.8);$('zoom-out').onclick=()=>zoom(1.25);
  $('network').onchange=e=>network.visible=e.target.checked;$('contours').onchange=e=>contourUniform.value=+e.target.checked;
  $('exaggeration').oninput=e=>{terrainGroup.scale.y=Number(e.target.value);$('exaggeration-value').textContent=`${Number(e.target.value).toFixed(1)}×`;};
- function setSelecting(value){selecting=value;$('drop').classList.toggle('selecting',value);$('drop').innerHTML=value?'⌖ &nbsp; Select a point · Esc to cancel':'⌖ &nbsp; Drop water on the map <span>↗</span>';$('hint').textContent=value?'Click or tap the terrain to trace water flow':'Drag to orbit · Scroll to zoom · Right-drag to pan';renderer.domElement.style.cursor=value?'crosshair':'grab';}
- $('drop').disabled=false;$('drop').onclick=()=>setSelecting(!selecting);
+ function setSelecting(value){
+  selecting=value;
+  $('drop').classList.toggle('selecting',value==='flow');
+  $('drop').innerHTML=value==='flow'?'⌖ &nbsp; Select a point · Esc to cancel':'⌖ &nbsp; Drop water on the map <span>↗</span>';
+  $('flood-source').classList.toggle('selecting',value==='flood');
+  $('flood-source').innerHTML=value==='flood'?'⌖ &nbsp; Select source · Esc to cancel':'⌖ &nbsp; Choose water source <span>↗</span>';
+  $('hint').textContent=value==='flood'?'Click or tap the terrain to choose a water source':value==='flow'?'Click or tap the terrain to trace water flow':'Drag to orbit · Scroll to zoom · Right-drag to pan';
+  renderer.domElement.style.cursor=value?'crosshair':'grab';
+  if(value&&matchMedia('(max-width: 600px)').matches)host.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+ }
+ $('drop').disabled=false;$('drop').onclick=()=>setSelecting(selecting==='flow'?false:'flow');
  window.addEventListener('keydown',e=>{if(e.key==='Escape')setSelecting(false);});
  const raycaster=new THREE.Raycaster();let down;
  renderer.domElement.addEventListener('pointerdown',e=>down={x:e.clientX,y:e.clientY});
- renderer.domElement.addEventListener('pointerup',e=>{if(!selecting||!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)return;const rect=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),camera);const hits=raycaster.intersectObject(terrain);if(!hits.length)return;const p=terrain.worldToLocal(hits[0].point.clone());const x=Math.max(0,Math.min(n-1,Math.round((p.x/size+.5)*(n-1)))),y=Math.max(0,Math.min(n-1,Math.round((p.z/size+.5)*(n-1))));select(y*n+x);setSelecting(false);});
+ renderer.domElement.addEventListener('pointerup',e=>{if(!selecting||!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)return;const rect=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),camera);const hits=raycaster.intersectObject(terrain);if(!hits.length)return;const p=terrain.worldToLocal(hits[0].point.clone());const x=Math.max(0,Math.min(n-1,Math.round((p.x/size+.5)*(n-1)))),y=Math.max(0,Math.min(n-1,Math.round((p.z/size+.5)*(n-1))));if(selecting==='flood')waterLayers.selectFloodSource(y*n+x);else select(y*n+x);setSelecting(false);});
  renderer.domElement.addEventListener('keydown',e=>{if(e.key==='+'||e.key==='=')zoom(.8);if(e.key==='-')zoom(1.25);if(e.key==='Home')setView(false);});
  const resize=()=>{const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.zoom=Math.min(1,camera.aspect/1.1);camera.updateProjectionMatrix();};new ResizeObserver(resize).observe(host);resize();
  $('loading').remove();
@@ -83,6 +95,6 @@ async function main(){
   const labelPosition=pin.localToWorld(new THREE.Vector3(0,160,0)).project(camera);const label=$('point-label');label.style.display=labelPosition.z<1&&Math.abs(labelPosition.x)<.9&&Math.abs(labelPosition.y)<.85?'block':'none';label.style.left=`${(labelPosition.x*.5+.5)*host.clientWidth+12}px`;label.style.top=`${(-labelPosition.y*.5+.5)*host.clientHeight-24}px`;
   $('north-arrow').style.transform=`rotate(${-controls.getAzimuthalAngle()}rad)`;renderer.render(scene,camera);
  });
- window.__watershed={data,hydro,getSelected:()=>selectedStart,getPath:()=>selectedPath,renderer};
+ window.__watershed={data,hydro,getSelected:()=>selectedStart,getPath:()=>selectedPath,waterLayers,renderer};
 }
 main().catch(error=>{console.error(error);const loading=$('loading');loading.innerHTML='<h2>Unable to load the landscape</h2><p></p><button class="primary" style="width:auto">Try again</button>';loading.querySelector('p').textContent=error.message;loading.querySelector('button').onclick=()=>location.reload();});

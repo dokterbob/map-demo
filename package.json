@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test",
-    "data:fetch": "node scripts/fetch-terrain.mjs"
+    "data:fetch": "node scripts/fetch-terrain.mjs",
+    "test:browser": "npm run build && node scripts/check-browser.mjs --static"
   },
   "keywords": [],
   "author": "",
