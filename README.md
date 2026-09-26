@@ -2,6 +2,22 @@
 
 An interactive 3D terrain and drainage explorer centered on **40.920722° N, 0.461112° E**.
 
+## The two prompts behind this project
+
+For teaching purposes, these are the two feature requests given to Codex, reproduced verbatim. The first led to the terrain and drainage explorer; the second added static-hosting support, terrain wetness, and adjustable inundation scenarios.
+
+**1. The initial map request**
+
+> Could create an interactive 3D map for me showing how water flows through the land around 40.920722, 0.461112?
+
+**2. The follow-up**
+
+> It's amazing! How can I roll a static build? Also, can we including flooding and wetness?
+
+The implementation choices and model limitations are documented below; the prompts themselves did not specify a hydrological method.
+
+## Run locally
+
 ```sh
 npm install
 npm run dev
