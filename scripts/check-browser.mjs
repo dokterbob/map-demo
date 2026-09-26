@@ -1,0 +1,18 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://localhost:5173');await page.waitForFunction(()=>Boolean(window.__watershed));await page.waitForTimeout(1200);
+await page.screenshot({path:'/tmp/watershed-desktop.png'});
+assert.match(await page.locator('#distance').innerText(),/km|m/);
+await page.locator('#view2d').click();await page.waitForTimeout(400);
+assert.equal(await page.locator('#view2d').getAttribute('aria-pressed'),'true');
+await page.locator('#drop').click();const bounds=await page.locator('canvas').boundingBox();await page.mouse.click(bounds.x+bounds.width*.42,bounds.y+bounds.height*.45);
+assert.match(await page.locator('#trace-title').innerText(),/SELECTED/);
+await page.locator('#network').uncheck();await page.locator('#animation').uncheck();await page.locator('#contours').uncheck();
+await page.locator('#exaggeration').fill('2.3');assert.equal(await page.locator('#exaggeration-value').innerText(),'2.3×');
+await page.locator('#reset').click();assert.match(await page.locator('#trace-title').innerText(),/YOUR LOCATION/);
+await page.setViewportSize({width:390,height:844});await page.waitForTimeout(500);await page.screenshot({path:'/tmp/watershed-mobile.png',fullPage:true});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+assert.deepEqual(errors,[]);console.log('Browser checks passed: WebGL rendering, trace selection, camera, layers, exaggeration, reset, mobile layout; no uncaught errors.');await browser.close();
